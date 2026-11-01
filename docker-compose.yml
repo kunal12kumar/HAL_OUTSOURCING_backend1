@@ -1,0 +1,54 @@
+# Backend only: PostgreSQL + Django API.
+#
+#   cp .env.example .env     # set POSTGRES_PASSWORD and DJANGO_SECRET_KEY
+#   docker compose up -d --build
+#   docker compose exec api python manage.py bootstrap_admin --username admin
+#
+# The frontend is a separate project. It talks to this API from its own server (not from the
+# browser), so no CORS setup is needed: point its BACKEND_URL at http://<this-host>:<API_PORT>.
+name: ${COMPOSE_PROJECT_NAME:-hal-backend}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hal
+      POSTGRES_USER: hal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hal -d hal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DJANGO_SSL_REDIRECT: ${DJANGO_SSL_REDIRECT:-0}
+      DJANGO_MEDIA_ROOT: /data/media
+      DATABASE_URL: postgres://hal:${POSTGRES_PASSWORD}@db:5432/hal
+      VENDOR_STALE_DAYS: ${VENDOR_STALE_DAYS:-7}
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8765}:8000"
+    volumes:
+      - media:/data/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  pgdata:
+  media:
