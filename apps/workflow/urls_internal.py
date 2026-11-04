@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -24,4 +24,5 @@ urlpatterns = [
     path("queue/", v.QueueView.as_view()),
     path("export/<str:name>/", v.ExportView.as_view()),
     path("documents/<int:pk>/download/", v.DocumentDownloadView.as_view()),
+    path("evaluation/", include("apps.evaluation.urls")),
 ] + router.urls
